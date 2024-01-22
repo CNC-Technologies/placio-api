@@ -3,7 +3,6 @@ package smartRoom
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"log"
 	"mime/multipart"
 	"placio-app/domains/media"
@@ -13,6 +12,8 @@ import (
 	"placio-app/ent/roomcategory"
 	"placio-app/utility"
 	"placio-pkg/errors"
+
+	"github.com/google/uuid"
 )
 
 type ISmartRoom interface {
@@ -29,6 +30,7 @@ type ISmartRoom interface {
 	UpdateRoom(ctx context.Context, roomId string, roomDto *ent.Room) (*ent.Room, error)
 	DeleteRoom(ctx context.Context, roomId string) error
 	RestoreRoom(ctx context.Context, roomId string) (*ent.Room, error)
+	GetRoomByPlaceID(ctx context.Context, placeId string) ([]*ent.Room, error)
 
 	GenerateRoomQRCode(ctx context.Context, roomId string) (string, error)
 }
@@ -253,6 +255,23 @@ func (s *SmartRoomService) CreateRoom(ctx context.Context, categoryId string, ro
 		return nil, fmt.Errorf("room category with ID '%s' does not exist", categoryId)
 	}
 
+	log.Printf("Creating room for category ID '%s'", roomDto)
+	// check if a room with the same room name or room number already exist, if yes return an error
+	roomAlreadyExists, err := s.client.Room.
+		Query().
+		Where(room.RoomNumberEQ(roomDto.RoomNumber)).
+		Where(room.HasRoomCategoryWith(roomcategory.IDEQ(categoryId))).
+		First(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			return nil, fmt.Errorf("error checking room existence: %w", err)
+		}
+	}
+
+	if roomAlreadyExists != nil {
+		return nil, fmt.Errorf("room with room number '%d' already exists", roomDto.RoomNumber)
+	}
+
 	// Create room
 	room, err := s.client.Room.
 		Create().
@@ -328,6 +347,31 @@ func (s *SmartRoomService) GetRoomByID(ctx context.Context, roomId string) (*ent
 	return room, nil
 }
 
+func (s *SmartRoomService) GetRoomByPlaceID(ctx context.Context, placeId string) ([]*ent.Room, error) {
+	if placeId == "" {
+		return nil, errors.New("placeId must be provided")
+	}
+
+	rooms, err := s.client.Room.
+		Query().
+		Where(room.HasRoomCategoryWith(roomcategory.HasPlaceWith(place.IDEQ(placeId)))).
+		WithRoomCategory(func(query *ent.RoomCategoryQuery) {
+			query.WithPlace(func(query *ent.PlaceQuery) {
+				query.WithMedias()
+			})
+			query.WithMedia()
+		}).
+		WithMedia().
+		WithReservations().
+		WithBookings().
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving rooms: %w", err)
+	}
+
+	return rooms, nil
+}
+
 func (s *SmartRoomService) UpdateRoom(ctx context.Context, roomId string, roomDto *ent.Room) (*ent.Room, error) {
 	if roomId == "" || roomDto == nil {
 		return nil, errors.New("roomId and room data must be provided")
@@ -335,7 +379,7 @@ func (s *SmartRoomService) UpdateRoom(ctx context.Context, roomId string, roomDt
 
 	updateOp := s.client.Room.
 		UpdateOneID(roomId).
-		SetRoomNumber(roomDto.RoomNumber).
+		//SetRoomNumber(*roomDto.RoomNumber).
 		SetRoomType(roomDto.RoomType).
 		SetRoomStatus(roomDto.RoomStatus).
 		SetRoomRating(roomDto.RoomRating).
