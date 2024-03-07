@@ -10,6 +10,7 @@ import (
 	"placio-app/domains/media"
 	"placio-app/domains/search"
 	"placio-app/ent"
+	"placio-app/ent/business"
 	"placio-app/ent/event"
 	"placio-app/ent/eventorganizer"
 	"strings"
@@ -17,11 +18,13 @@ import (
 )
 
 type IEventService interface {
-	CreateEvent(ctx context.Context, businessId string, data *ent.Event) (*ent.Event, error)
-	AddOrganizers(ctx context.Context, eventID string, organizers []OrganizerInput) error
+	CreateEvent(ctx context.Context, businessId string, data *EventDTO) (*ent.Event, error)
+	GetEventByBusinessID(ctx context.Context, businessID string) ([]*ent.Event, error)
+	AddOrganizers(ctx context.Context, eventID string, organizers []OrganizerInfo) error
 	RemoveOrganizer(ctx context.Context, eventID string, organizerID string) error
 	GetOrganizersForEvent(ctx context.Context, eventID string) ([]interface{}, error)
-	UpdateEvent(ctx context.Context, eventId string, businessId string, data *ent.Event) (*ent.Event, error)
+	GetEventsByOrganizerID(ctx context.Context, organizerId string) ([]*ent.Event, error)
+	UpdateEvent(ctx context.Context, eventId string, businessId string, data *EventDTO) (*ent.Event, error)
 	GetEventByID(ctx context.Context, id string) (*ent.Event, error)
 	DeleteEvent(ctx context.Context, eventId string) error
 	AddMediaToEvent(ctx context.Context, eventID string, files []*multipart.FileHeader) (*ent.Event, error)
@@ -202,13 +205,9 @@ func (s *EventService) MultiLanguageSupport(ctx context.Context, eventId string,
 	panic("implement me")
 }
 
-func (s *EventService) CreateEvent(ctx context.Context, userID string, data *ent.Event) (*ent.Event, error) {
-	// Extract organizers from context
-	organizers, ok := ctx.Value(OrganizerContextKey).([]OrganizerInfo)
-	if !ok {
-		return nil, errors.New("organizer information missing")
-	}
+func (s *EventService) CreateEvent(ctx context.Context, userID string, data *EventDTO) (*ent.Event, error) {
 
+	organizers := data.OrganizerInfo
 	// Start a transaction
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
@@ -220,7 +219,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID string, data *ent
 		SetName(data.Name).
 		SetID(uuid.NewString()).
 		SetNillableName(&data.Name). // SetNillable used for optional fields
-		SetNillableEventType(&data.EventType).
+		//SetNillableEventType(event.EventType(data.EventType)).
 		SetNillableStatus(&data.Status).
 		SetNillableLocation(&data.Location).
 		SetNillableURL(&data.URL).
@@ -274,7 +273,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID string, data *ent
 		SetIsOnlineAndInPersonOrHybrid(data.IsOnlineAndInPersonOrHybrid).
 		SetLikedByCurrentUser(data.LikedByCurrentUser).
 		SetFollowedByCurrentUser(data.FollowedByCurrentUser).
-		SetNillableRegistrationType(&data.RegistrationType).
+		//SetNillableRegistrationType(&data.RegistrationType).
 		SetNillableRegistrationURL(&data.RegistrationURL).
 		SetIsPhysicallyAccessible(data.IsPhysicallyAccessible).
 		SetNillableAccessibilityInfo(&data.AccessibilityInfo).
@@ -295,6 +294,11 @@ func (s *EventService) CreateEvent(ctx context.Context, userID string, data *ent
 		}
 	}
 
+	// add event to business
+	_, err = tx.Business.UpdateOneID(userID).
+		AddEvents(event).
+		Save(ctx)
+
 	// Attempt to commit the transaction
 	if err := tx.Commit(); err != nil {
 		return nil, err
@@ -303,12 +307,32 @@ func (s *EventService) CreateEvent(ctx context.Context, userID string, data *ent
 	return event, nil
 }
 
+func (s *EventService) GetEventByBusinessID(ctx context.Context, businessID string) ([]*ent.Event, error) {
+	events, err := s.client.Event.Query().
+		Where(event.HasOwnerBusinessWith(business.ID(businessID))).
+		WithEventCategories().
+		WithEventCategoryAssignments().
+		WithOwnerUser().
+		WithOwnerBusiness().
+		WithUserFollowers().
+		WithBusinessFollowers().
+		WithEventOrganizers().
+		WithMedia().
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+
+}
+
 // Helper function to add an organizer to an event, distinguishing between user and business types
 func addOrganizerToEvent(ctx context.Context, tx *ent.Tx, event *ent.Event, org OrganizerInfo) error {
 	switch org.Type {
 	case "user":
 		_, err := tx.EventOrganizer.Create().
 			SetEvent(event).
+			SetID(uuid.New().String()).
 			SetOrganizerID(org.ID).
 			SetOrganizerType("user").
 			Save(ctx)
@@ -316,6 +340,7 @@ func addOrganizerToEvent(ctx context.Context, tx *ent.Tx, event *ent.Event, org 
 	case "business":
 		_, err := tx.EventOrganizer.Create().
 			SetEvent(event).
+			SetID(uuid.New().String()).
 			SetOrganizerID(org.ID).
 			SetOrganizerType("business").
 			Save(ctx)
@@ -325,27 +350,49 @@ func addOrganizerToEvent(ctx context.Context, tx *ent.Tx, event *ent.Event, org 
 	}
 }
 
+func (s *EventService) GetEventsByOrganizerID(ctx context.Context, organizerId string) ([]*ent.Event, error) {
+	events, err := s.client.EventOrganizer.
+		Query().
+		Where(eventorganizer.OrganizerID(organizerId)).
+		WithEvent().
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []*ent.Event
+	for _, event := range events {
+		result = append(result, event.Edges.Event)
+	}
+	return result, nil
+}
+
 func (s *EventService) RemoveMediaFromEvent(ctx context.Context, eventID string, mediaID string) error {
-	// Fetch the event to ensure it exists
-	_, err := s.client.Event.Get(ctx, eventID)
+	// Start a transaction
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		sentry.CaptureException(err)
 		return err
 	}
 
-	// Fetch the media to ensure it exists
-	media, err := s.client.Media.Get(ctx, mediaID)
+	// get media
+	media, err := tx.Media.Get(ctx, mediaID)
 	if err != nil {
+		tx.Rollback()
 		sentry.CaptureException(err)
 		return err
-
 	}
 
-	// Remove the media from the event
-	_, err = s.client.Event.UpdateOneID(eventID).
+	err = tx.Event.UpdateOneID(eventID).
 		RemoveMedia(media).
-		Save(ctx)
+		Exec(ctx)
 	if err != nil {
+		tx.Rollback()
+		sentry.CaptureException(err)
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
 		sentry.CaptureException(err)
 		return err
 	}
@@ -353,27 +400,42 @@ func (s *EventService) RemoveMediaFromEvent(ctx context.Context, eventID string,
 	return nil
 }
 
-func (s *EventService) AddOrganizers(ctx context.Context, eventID string, organizers []OrganizerInput) error {
+func (s *EventService) AddOrganizers(ctx context.Context, eventID string, organizers []OrganizerInfo) error {
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, organizer := range organizers {
-		if organizer.OrganizerType != "user" && organizer.OrganizerType != "business" {
-			tx.Rollback()
-			return errors.New("invalid organizer type")
+		if organizer.Type != "user" && organizer.Type != "business" {
+			continue
 		}
 
-		_, err := tx.EventOrganizer.
-			Create().
-			SetOrganizerID(organizer.OrganizerID).
-			SetOrganizerType(organizer.OrganizerType).
-			SetEventID(eventID).
-			Save(ctx)
+		exists, err := tx.EventOrganizer.
+			Query().
+			Where(
+				eventorganizer.OrganizerID(organizer.ID),
+				eventorganizer.HasEventWith(event.ID(eventID)),
+				eventorganizer.OrganizerType(organizer.Type),
+			).
+			Exist(ctx)
 		if err != nil {
 			tx.Rollback()
 			return err
+		}
+
+		if !exists {
+			_, err := tx.EventOrganizer.
+				Create().
+				SetID(uuid.New().String()).
+				SetOrganizerID(organizer.ID).
+				SetOrganizerType(organizer.Type).
+				SetEventID(eventID).
+				Save(ctx)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
 		}
 	}
 
@@ -417,7 +479,6 @@ func (s *EventService) RemoveOrganizer(ctx context.Context, eventID string, orga
 		return err
 	}
 
-	// Attempt to remove the organizer
 	_, err = tx.EventOrganizer.Delete().
 		Where(
 			eventorganizer.HasEventWith(event.ID(eventID)),
@@ -432,11 +493,11 @@ func (s *EventService) RemoveOrganizer(ctx context.Context, eventID string, orga
 	return tx.Commit()
 }
 
-func (s *EventService) UpdateEvent(ctx context.Context, eventId string, businessId string, data *ent.Event) (*ent.Event, error) {
-	userID, exist := ctx.Value("userId").(string)
-	if !exist {
-		return nil, errors.New("user not found")
-	}
+func (s *EventService) UpdateEvent(ctx context.Context, eventId string, businessId string, data *EventDTO) (*ent.Event, error) {
+	//userID, exist := ctx.Value("userId").(string)
+	//if !exist {
+	//	return nil, errors.New("user not found")
+	//}
 
 	// Load the event with its owner edges to check ownership.
 	event, err := s.client.Event.Query().
@@ -452,9 +513,9 @@ func (s *EventService) UpdateEvent(ctx context.Context, eventId string, business
 	if event.Edges.OwnerBusiness != nil && businessId != event.Edges.OwnerBusiness.ID {
 		return nil, errors.New("unauthorized: You can only update events that your business owns")
 	}
-	if event.Edges.OwnerUser != nil && userID != event.Edges.OwnerUser.ID {
-		return nil, errors.New("unauthorized: You can only update events that you own")
-	}
+	//if event.Edges.OwnerUser != nil && userID != event.Edges.OwnerUser.ID {
+	//	return nil, errors.New("unauthorized: You can only update events that you own")
+	//}
 
 	// Begin updating the event fields
 	upd := s.client.Event.UpdateOneID(eventId)
@@ -465,7 +526,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, eventId string, business
 	}
 	if data.EventType != "" {
 		// Assuming parseEventType returns an ent.EventType enum and handles conversion.
-		if eventType, err := parseEventType(string(data.EventType)); err == nil {
+		if eventType, err := parseEventType(data.EventType); err == nil {
 			upd.SetEventType(eventType)
 		} else {
 			return nil, err
@@ -644,31 +705,63 @@ func (s *EventService) DeleteEvent(ctx context.Context, eventId string) error {
 	return nil
 }
 
+// AddMediaToEvent adds media files to an event. It starts a transaction and fetches the event with the given eventID. Then, it uploads and creates media files using the media service
 func (s *EventService) AddMediaToEvent(ctx context.Context, eventID string, files []*multipart.FileHeader) (*ent.Event, error) {
-	// Fetch event
-	eventData, err := s.client.Event.Get(ctx, eventID)
+	// Start a transaction
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		sentry.CaptureException(err)
 		return nil, err
 	}
 
-	// Upload files and create media entities
+	// Fetch event within transaction
+	eventData, err := tx.Event.Get(ctx, eventID)
+	if err != nil {
+		sentry.CaptureException(err)
+		tx.Rollback()
+		return nil, err
+	}
+
 	uploadedFiles, err := s.mediaService.UploadAndCreateMedia(ctx, files)
 	if err != nil {
 		sentry.CaptureException(err)
+		tx.Rollback()
 		return nil, err
 	}
 
-	// Associate uploaded media with the event
-	eventData, err = s.client.Event.UpdateOne(eventData).
+	eventData, err = tx.Event.UpdateOne(eventData).
 		AddMedia(uploadedFiles...).
 		Save(ctx)
 	if err != nil {
 		sentry.CaptureException(err)
+		tx.Rollback()
 		return nil, err
 	}
 
-	return eventData, nil
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		sentry.CaptureException(err)
+		return nil, err
+	}
+
+	event, err := s.client.Event.Query().
+		Where(event.IDEQ(eventID)).
+		WithOwnerUser().
+		WithOwnerBusiness().
+		WithEventOrganizers().
+		WithMedia().
+		WithEventComments().
+		WithAdditionalOrganizers().
+		WithPlace(func(query *ent.PlaceQuery) {
+			query.WithMedias()
+		}).First(ctx)
+
+	if err != nil {
+		sentry.CaptureException(err)
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (s *EventService) GetEvents(ctx context.Context, filter *EventFilter, page int, pageSize int) ([]*ent.Event, error) {
@@ -677,53 +770,25 @@ func (s *EventService) GetEvents(ctx context.Context, filter *EventFilter, page 
 		WithOwnerUser().
 		WithOwnerBusiness()
 
-	//// Apply filters
-	//if filter.EventType != "" {
-	//	eventTypeEnum, err := parseEventType(filter.EventType)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	query = query.Where(event.HasEventTypeWith(event.EventTypeEqual(eventTypeEnum)))
-	//}
-	//if filter.Status != "" {
-	//	query = query.Where(event.StatusEqual(filter.Status))
-	//}
-	//if filter.Location != "" {
-	//	query = query.Where(event.LocationEqual(filter.Location))
-	//}
-	//if filter.Title != "" {
-	//	query = query.Where(event.TitleEqual(filter.Title))
-	//}
-	//// ... You can add similar checks for other string fields ...
-	//
-	//// Apply date ranges
-	//if filter.StartDate.From != "" {
-	//	from, err := time.Parse("2006-01-02", filter.StartDate.From)
-	//	if err == nil {
-	//		query = query.Where(event.StartDateGTE(from))
-	//	}
-	//}
-	//if filter.StartDate.To != "" {
-	//	to, err := time.Parse("2006-01-02", filter.StartDate.To)
-	//	if err == nil {
-	//		query = query.Where(event.StartDateLTE(to))
-	//	}
-	//}
-	//
-	//if filter.EndDate.From != "" {
-	//	from, err := time.Parse("2006-01-02", filter.EndDate.From)
-	//	if err == nil {
-	//		query = query.Where(event.EndDateGTE(from))
-	//	}
-	//}
-	//if filter.EndDate.To != "" {
-	//	to, err := time.Parse("2006-01-02", filter.EndDate.To)
-	//	if err == nil {
-	//		query = query.Where(event.EndDateLTE(to))
-	//	}
-	//}
+	if filter.EventType != "" {
+		eventType, err := parseEventType(filter.EventType)
+		if err != nil {
+		}
+		query = query.Where(event.EventTypeIn(eventType))
+	}
+	if filter.Status != "" {
+		query = query.Where(event.StatusContainsFold(filter.Status))
+	}
+	if filter.Location != "" {
+		query = query.Where(event.LocationContainsFold(filter.Location))
+	}
+	if filter.Title != "" {
+		query = query.Where(event.TitleContainsFold(filter.Title))
+	}
+	if filter.TimeZone != "" {
+		query = query.Where(event.TimeZoneContainsFold(filter.TimeZone))
+	}
 
-	// Apply time ranges
 	if !filter.StartTime.From.IsZero() {
 		query = query.Where(event.StartTimeGTE(filter.StartTime.From))
 	}
@@ -737,10 +802,8 @@ func (s *EventService) GetEvents(ctx context.Context, filter *EventFilter, page 
 		query = query.Where(event.EndTimeLTE(filter.EndTime.To))
 	}
 
-	// Apply pagination
 	query = query.Offset((page - 1) * pageSize).Limit(pageSize)
 
-	// Execute query
 	events, err := query.All(ctx)
 	if err != nil {
 		return nil, err
@@ -760,6 +823,10 @@ func parseEventType(s string) (event.EventType, error) {
 		return event.EventTypePlace, nil
 	case strings.ToLower(string(event.EventTypeBusiness)):
 		return event.EventTypeBusiness, nil
+	case strings.ToLower(string(event.EventTypeFree)):
+		return event.EventTypeFree, nil
+	case strings.ToLower(string(event.EventTypePaid)):
+		return event.EventTypePaid, nil
 	default:
 		return "", fmt.Errorf("invalid EventType: %s", s)
 	}

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	_ "placio-app/Dto"
-	"placio-app/ent"
 	_ "placio-app/ent"
 	"placio-app/utility"
 	"placio-pkg/middleware"
@@ -35,8 +34,28 @@ func (c *EventController) RegisterRoutes(router, routerWithoutAuth *gin.RouterGr
 	eventRouter.DELETE("/:eventId/media/:mediaID", middleware.ErrorMiddleware(c.removeMediaFromEvent))
 	eventRouter.POST("/:eventId/organizers", middleware.ErrorMiddleware(c.addOrganizersToEvent))
 	eventRouterWithoutAuth.GET("/:eventId/organizers", middleware.ErrorMiddleware(c.getOrganizersForEvent))
+	eventRouterWithoutAuth.GET("/organizers/:organizerId", middleware.ErrorMiddleware(c.getEventsByOrganizerId))
 	eventRouter.DELETE("/:eventId/organizers/:organizerId", middleware.ErrorMiddleware(c.removeOrganizerFromEvent))
 }
+
+// TODO: Add the rest of the methods
+// 8. test add ticket to event
+// 9. test get ticket by event id
+// 10. test get ticket by id
+// 11. test update ticket
+// 12. test delete ticket
+// 13. test get event participants
+// 14. add event participants
+// 15. remove event participants
+// 17. add user ticket purchase
+// 18. get user ticket purchase
+// 19. update user ticket purchase
+// 20. delete user ticket purchase
+// 21. add ability to cancel event
+// 22. add notifications to event
+// 23. automatically send notifications to event participants
+// 24. add a button to create a post with event
+// 25. add ability to add event to calendar
 
 // CreateEvent godoc
 // @Summary Create Event
@@ -52,7 +71,7 @@ func (c *EventController) RegisterRoutes(router, routerWithoutAuth *gin.RouterGr
 // @Failure 500 {object} Dto.ErrorDTO
 // @Router /events [post]
 func (c *EventController) createEvent(ctx *gin.Context) error {
-	var data *ent.Event
+	var data *EventDTO
 	if err := ctx.ShouldBindJSON(&data); err != nil {
 		log.Println("error: ", err)
 		return err
@@ -88,7 +107,7 @@ func (c *EventController) createEvent(ctx *gin.Context) error {
 // @Failure 500 {object} Dto.ErrorDTO
 // @Router /events/{eventId} [put]
 func (c *EventController) updateEvent(ctx *gin.Context) error {
-	var data *ent.Event
+	var data *EventDTO
 	if err := ctx.ShouldBindJSON(&data); err != nil {
 		return err
 	}
@@ -104,7 +123,7 @@ func (c *EventController) updateEvent(ctx *gin.Context) error {
 }
 
 func (c *EventController) addMediaToEvent(ctx *gin.Context) error {
-	eventID := ctx.Param("id")
+	eventID := ctx.Param("eventId")
 
 	files, err := ctx.MultipartForm()
 	if err != nil {
@@ -128,7 +147,7 @@ func (c *EventController) addMediaToEvent(ctx *gin.Context) error {
 // AddOrganizersToEvent handles adding organizers to an event.
 func (c *EventController) addOrganizersToEvent(ctx *gin.Context) error {
 	eventID := ctx.Param("eventId")
-	var organizers []OrganizerInput
+	var organizers []OrganizerInfo
 	if err := ctx.BindJSON(&organizers); err != nil {
 		return err
 	}
@@ -153,10 +172,22 @@ func (c *EventController) getOrganizersForEvent(ctx *gin.Context) error {
 	return nil
 }
 
+// GetEventsByOrganizerId handles retrieving events for an organizer.
+func (c *EventController) getEventsByOrganizerId(ctx *gin.Context) error {
+	organizerID := ctx.Param("organizerId")
+	events, err := c.service.GetEventsByOrganizerID(ctx, organizerID)
+	if err != nil {
+		return err
+	}
+
+	ctx.JSON(http.StatusOK, utility.ProcessResponse(events))
+	return nil
+}
+
 // RemoveOrganizerFromEvent handles removing an organizer from an event.
 func (c *EventController) removeOrganizerFromEvent(ctx *gin.Context) error {
 	eventID := ctx.Param("eventId")
-	organizerID := ctx.Param("organizerId") // Ensure this param name matches your routing definition
+	organizerID := ctx.Param("organizerId")
 
 	if err := c.service.RemoveOrganizer(ctx, eventID, organizerID); err != nil {
 		return err
@@ -167,7 +198,7 @@ func (c *EventController) removeOrganizerFromEvent(ctx *gin.Context) error {
 }
 
 func (c *EventController) removeMediaFromEvent(ctx *gin.Context) error {
-	eventID := ctx.Param("id")
+	eventID := ctx.Param("eventId")
 	mediaID := ctx.Param("mediaID")
 
 	if err := c.service.RemoveMediaFromEvent(ctx, eventID, mediaID); err != nil {
@@ -199,6 +230,17 @@ func (c *EventController) getEventsByFilters(ctx *gin.Context) error {
 		return err
 	}
 
+	businessId := ctx.Query("businessId")
+
+	if businessId != "" {
+		events, err := c.service.GetEventByBusinessID(ctx, businessId)
+		if err != nil {
+			return err
+		}
+		ctx.JSON(http.StatusOK, utility.ProcessResponse(events))
+		return nil
+	}
+
 	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	if err != nil {
 
@@ -217,7 +259,7 @@ func (c *EventController) getEventsByFilters(ctx *gin.Context) error {
 		return err
 	}
 
-	ctx.JSON(http.StatusOK, events)
+	ctx.JSON(http.StatusOK, utility.ProcessResponse(events))
 	return nil
 }
 
@@ -239,7 +281,7 @@ func (c *EventController) getEventByID(ctx *gin.Context) error {
 
 		return err
 	}
-	ctx.JSON(http.StatusOK, event)
+	ctx.JSON(http.StatusOK, utility.ProcessResponse(event))
 	return nil
 }
 
@@ -261,7 +303,7 @@ func (c *EventController) deleteEvent(ctx *gin.Context) error {
 
 		return err
 	}
-	ctx.JSON(http.StatusOK, "Deleted")
+	ctx.JSON(http.StatusNoContent, utility.ProcessResponse("", "Deleted"))
 	return nil
 }
 

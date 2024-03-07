@@ -263,7 +263,7 @@ var (
 				Symbol:     "categories_events_event_categories",
 				Columns:    []*schema.Column{CategoriesColumns[11]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "categories_places_categories",
@@ -315,7 +315,7 @@ var (
 				Symbol:     "category_assignments_events_event_category_assignments",
 				Columns:    []*schema.Column{CategoryAssignmentsColumns[4]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "category_assignments_places_categoryAssignments",
@@ -369,7 +369,7 @@ var (
 				Symbol:     "comments_events_event_comments",
 				Columns:    []*schema.Column{CommentsColumns[5]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "comments_posts_comments",
@@ -506,7 +506,7 @@ var (
 	}
 	// EventOrganizersColumns holds the columns for the "event_organizers" table.
 	EventOrganizersColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString},
+		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "organizer_id", Type: field.TypeString},
 		{Name: "organizer_type", Type: field.TypeString},
 		{Name: "event_event_organizers", Type: field.TypeString},
@@ -521,7 +521,7 @@ var (
 				Symbol:     "event_organizers_events_event_organizers",
 				Columns:    []*schema.Column{EventOrganizersColumns[3]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.NoAction,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -721,7 +721,7 @@ var (
 				Symbol:     "media_events_media",
 				Columns:    []*schema.Column{MediaColumns[7]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "media_menu_items_media",
@@ -964,7 +964,7 @@ var (
 				Symbol:     "places_events_place",
 				Columns:    []*schema.Column{PlacesColumns[38]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -1253,7 +1253,7 @@ var (
 				Symbol:     "ratings_events_ratings",
 				Columns:    []*schema.Column{RatingsColumns[5]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "ratings_places_ratings",
@@ -1398,7 +1398,7 @@ var (
 				Symbol:     "reviews_events_event_reviews",
 				Columns:    []*schema.Column{ReviewsColumns[7]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "reviews_places_reviews",
@@ -1540,9 +1540,16 @@ var (
 	// TicketsColumns holds the columns for the "tickets" table.
 	TicketsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "ticket_code", Type: field.TypeString, Unique: true},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"available", "reserved", "sold", "validated"}, Default: "available"},
+		{Name: "purchase_time", Type: field.TypeTime},
+		{Name: "validation_time", Type: field.TypeTime, Nullable: true},
+		{Name: "purchaser_email", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "event_tickets", Type: field.TypeString, Nullable: true},
+		{Name: "event_tickets", Type: field.TypeString},
+		{Name: "ticket_option_tickets", Type: field.TypeString},
+		{Name: "user_purchased_tickets", Type: field.TypeString, Nullable: true, Size: 36},
 	}
 	// TicketsTable holds the schema information for the "tickets" table.
 	TicketsTable = &schema.Table{
@@ -1552,8 +1559,20 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "tickets_events_tickets",
-				Columns:    []*schema.Column{TicketsColumns[3]},
+				Columns:    []*schema.Column{TicketsColumns[8]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "tickets_ticket_options_tickets",
+				Columns:    []*schema.Column{TicketsColumns[9]},
+				RefColumns: []*schema.Column{TicketOptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "tickets_users_purchasedTickets",
+				Columns:    []*schema.Column{TicketsColumns[10]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -1561,10 +1580,15 @@ var (
 	// TicketOptionsColumns holds the columns for the "ticket_options" table.
 	TicketOptionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Size: 2147483647},
+		{Name: "price", Type: field.TypeFloat64, Default: 0},
+		{Name: "quantity_available", Type: field.TypeInt, Default: 0},
+		{Name: "quantity_sold", Type: field.TypeInt, Default: 0},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"active", "inactive", "sold_out"}, Default: "active"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "event_ticket_options", Type: field.TypeString, Nullable: true},
-		{Name: "ticket_ticket_options", Type: field.TypeString, Nullable: true},
 	}
 	// TicketOptionsTable holds the schema information for the "ticket_options" table.
 	TicketOptionsTable = &schema.Table{
@@ -1573,16 +1597,10 @@ var (
 		PrimaryKey: []*schema.Column{TicketOptionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "ticket_options_events_ticket_options",
-				Columns:    []*schema.Column{TicketOptionsColumns[3]},
+				Symbol:     "ticket_options_events_ticketOptions",
+				Columns:    []*schema.Column{TicketOptionsColumns[9]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "ticket_options_tickets_ticket_options",
-				Columns:    []*schema.Column{TicketOptionsColumns[4]},
-				RefColumns: []*schema.Column{TicketsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -1665,13 +1683,13 @@ var (
 				Symbol:     "users_events_additional_organizers",
 				Columns:    []*schema.Column{UsersColumns[22]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "users_events_performers",
 				Columns:    []*schema.Column{UsersColumns[23]},
 				RefColumns: []*schema.Column{EventsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Cascade,
 			},
 		},
 	}
@@ -3066,8 +3084,9 @@ func init() {
 	SubscriptionsTable.ForeignKeys[1].RefTable = PricesTable
 	SubscriptionsTable.ForeignKeys[2].RefTable = UsersTable
 	TicketsTable.ForeignKeys[0].RefTable = EventsTable
+	TicketsTable.ForeignKeys[1].RefTable = TicketOptionsTable
+	TicketsTable.ForeignKeys[2].RefTable = UsersTable
 	TicketOptionsTable.ForeignKeys[0].RefTable = EventsTable
-	TicketOptionsTable.ForeignKeys[1].RefTable = TicketsTable
 	TransactionHistoriesTable.ForeignKeys[0].RefTable = PlaceInventoriesTable
 	TransactionHistoriesTable.ForeignKeys[1].RefTable = UsersTable
 	UsersTable.ForeignKeys[0].RefTable = EventsTable
