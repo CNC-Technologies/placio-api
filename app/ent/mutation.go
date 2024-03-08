@@ -11741,6 +11741,8 @@ type EventMutation struct {
 	is_Premium                        *bool
 	is_published                      *bool
 	is_Online                         *bool
+	is_cancelled                      *bool
+	is_Active                         *bool
 	is_Free                           *bool
 	is_Paid                           *bool
 	is_public                         *bool
@@ -14058,6 +14060,78 @@ func (m *EventMutation) ResetIsOnline() {
 	m.is_Online = nil
 }
 
+// SetIsCancelled sets the "is_cancelled" field.
+func (m *EventMutation) SetIsCancelled(b bool) {
+	m.is_cancelled = &b
+}
+
+// IsCancelled returns the value of the "is_cancelled" field in the mutation.
+func (m *EventMutation) IsCancelled() (r bool, exists bool) {
+	v := m.is_cancelled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsCancelled returns the old "is_cancelled" field's value of the Event entity.
+// If the Event object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventMutation) OldIsCancelled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsCancelled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsCancelled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsCancelled: %w", err)
+	}
+	return oldValue.IsCancelled, nil
+}
+
+// ResetIsCancelled resets all changes to the "is_cancelled" field.
+func (m *EventMutation) ResetIsCancelled() {
+	m.is_cancelled = nil
+}
+
+// SetIsActive sets the "is_Active" field.
+func (m *EventMutation) SetIsActive(b bool) {
+	m.is_Active = &b
+}
+
+// IsActive returns the value of the "is_Active" field in the mutation.
+func (m *EventMutation) IsActive() (r bool, exists bool) {
+	v := m.is_Active
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsActive returns the old "is_Active" field's value of the Event entity.
+// If the Event object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EventMutation) OldIsActive(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsActive is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsActive requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsActive: %w", err)
+	}
+	return oldValue.IsActive, nil
+}
+
+// ResetIsActive resets all changes to the "is_Active" field.
+func (m *EventMutation) ResetIsActive() {
+	m.is_Active = nil
+}
+
 // SetIsFree sets the "is_Free" field.
 func (m *EventMutation) SetIsFree(b bool) {
 	m.is_Free = &b
@@ -15595,7 +15669,7 @@ func (m *EventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EventMutation) Fields() []string {
-	fields := make([]string, 0, 60)
+	fields := make([]string, 0, 62)
 	if m.name != nil {
 		fields = append(fields, event.FieldName)
 	}
@@ -15727,6 +15801,12 @@ func (m *EventMutation) Fields() []string {
 	}
 	if m.is_Online != nil {
 		fields = append(fields, event.FieldIsOnline)
+	}
+	if m.is_cancelled != nil {
+		fields = append(fields, event.FieldIsCancelled)
+	}
+	if m.is_Active != nil {
+		fields = append(fields, event.FieldIsActive)
 	}
 	if m.is_Free != nil {
 		fields = append(fields, event.FieldIsFree)
@@ -15872,6 +15952,10 @@ func (m *EventMutation) Field(name string) (ent.Value, bool) {
 		return m.IsPublished()
 	case event.FieldIsOnline:
 		return m.IsOnline()
+	case event.FieldIsCancelled:
+		return m.IsCancelled()
+	case event.FieldIsActive:
+		return m.IsActive()
 	case event.FieldIsFree:
 		return m.IsFree()
 	case event.FieldIsPaid:
@@ -16001,6 +16085,10 @@ func (m *EventMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldIsPublished(ctx)
 	case event.FieldIsOnline:
 		return m.OldIsOnline(ctx)
+	case event.FieldIsCancelled:
+		return m.OldIsCancelled(ctx)
+	case event.FieldIsActive:
+		return m.OldIsActive(ctx)
 	case event.FieldIsFree:
 		return m.OldIsFree(ctx)
 	case event.FieldIsPaid:
@@ -16349,6 +16437,20 @@ func (m *EventMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIsOnline(v)
+		return nil
+	case event.FieldIsCancelled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsCancelled(v)
+		return nil
+	case event.FieldIsActive:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsActive(v)
 		return nil
 	case event.FieldIsFree:
 		v, ok := value.(bool)
@@ -16924,6 +17026,12 @@ func (m *EventMutation) ResetField(name string) error {
 		return nil
 	case event.FieldIsOnline:
 		m.ResetIsOnline()
+		return nil
+	case event.FieldIsCancelled:
+		m.ResetIsCancelled()
+		return nil
+	case event.FieldIsActive:
+		m.ResetIsActive()
 		return nil
 	case event.FieldIsFree:
 		m.ResetIsFree()
@@ -56066,6 +56174,9 @@ type TicketOptionMutation struct {
 	tickets              map[string]struct{}
 	removedtickets       map[string]struct{}
 	clearedtickets       bool
+	media                map[string]struct{}
+	removedmedia         map[string]struct{}
+	clearedmedia         bool
 	done                 bool
 	oldValue             func(context.Context) (*TicketOption, error)
 	predicates           []predicate.TicketOption
@@ -56616,6 +56727,60 @@ func (m *TicketOptionMutation) ResetTickets() {
 	m.removedtickets = nil
 }
 
+// AddMediumIDs adds the "media" edge to the Media entity by ids.
+func (m *TicketOptionMutation) AddMediumIDs(ids ...string) {
+	if m.media == nil {
+		m.media = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.media[ids[i]] = struct{}{}
+	}
+}
+
+// ClearMedia clears the "media" edge to the Media entity.
+func (m *TicketOptionMutation) ClearMedia() {
+	m.clearedmedia = true
+}
+
+// MediaCleared reports if the "media" edge to the Media entity was cleared.
+func (m *TicketOptionMutation) MediaCleared() bool {
+	return m.clearedmedia
+}
+
+// RemoveMediumIDs removes the "media" edge to the Media entity by IDs.
+func (m *TicketOptionMutation) RemoveMediumIDs(ids ...string) {
+	if m.removedmedia == nil {
+		m.removedmedia = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.media, ids[i])
+		m.removedmedia[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedMedia returns the removed IDs of the "media" edge to the Media entity.
+func (m *TicketOptionMutation) RemovedMediaIDs() (ids []string) {
+	for id := range m.removedmedia {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// MediaIDs returns the "media" edge IDs in the mutation.
+func (m *TicketOptionMutation) MediaIDs() (ids []string) {
+	for id := range m.media {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetMedia resets all changes to the "media" edge.
+func (m *TicketOptionMutation) ResetMedia() {
+	m.media = nil
+	m.clearedmedia = false
+	m.removedmedia = nil
+}
+
 // Where appends a list predicates to the TicketOptionMutation builder.
 func (m *TicketOptionMutation) Where(ps ...predicate.TicketOption) {
 	m.predicates = append(m.predicates, ps...)
@@ -56907,12 +57072,15 @@ func (m *TicketOptionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *TicketOptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.event != nil {
 		edges = append(edges, ticketoption.EdgeEvent)
 	}
 	if m.tickets != nil {
 		edges = append(edges, ticketoption.EdgeTickets)
+	}
+	if m.media != nil {
+		edges = append(edges, ticketoption.EdgeMedia)
 	}
 	return edges
 }
@@ -56931,15 +57099,24 @@ func (m *TicketOptionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case ticketoption.EdgeMedia:
+		ids := make([]ent.Value, 0, len(m.media))
+		for id := range m.media {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *TicketOptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedtickets != nil {
 		edges = append(edges, ticketoption.EdgeTickets)
+	}
+	if m.removedmedia != nil {
+		edges = append(edges, ticketoption.EdgeMedia)
 	}
 	return edges
 }
@@ -56954,18 +57131,27 @@ func (m *TicketOptionMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case ticketoption.EdgeMedia:
+		ids := make([]ent.Value, 0, len(m.removedmedia))
+		for id := range m.removedmedia {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *TicketOptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedevent {
 		edges = append(edges, ticketoption.EdgeEvent)
 	}
 	if m.clearedtickets {
 		edges = append(edges, ticketoption.EdgeTickets)
+	}
+	if m.clearedmedia {
+		edges = append(edges, ticketoption.EdgeMedia)
 	}
 	return edges
 }
@@ -56978,6 +57164,8 @@ func (m *TicketOptionMutation) EdgeCleared(name string) bool {
 		return m.clearedevent
 	case ticketoption.EdgeTickets:
 		return m.clearedtickets
+	case ticketoption.EdgeMedia:
+		return m.clearedmedia
 	}
 	return false
 }
@@ -57002,6 +57190,9 @@ func (m *TicketOptionMutation) ResetEdge(name string) error {
 		return nil
 	case ticketoption.EdgeTickets:
 		m.ResetTickets()
+		return nil
+	case ticketoption.EdgeMedia:
+		m.ResetMedia()
 		return nil
 	}
 	return fmt.Errorf("unknown TicketOption edge %s", name)

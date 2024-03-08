@@ -458,6 +458,8 @@ var (
 		{Name: "is_premium", Type: field.TypeBool, Default: false},
 		{Name: "is_published", Type: field.TypeBool, Default: false},
 		{Name: "is_online", Type: field.TypeBool, Default: false},
+		{Name: "is_cancelled", Type: field.TypeBool, Default: false},
+		{Name: "is_active", Type: field.TypeBool, Default: false},
 		{Name: "is_free", Type: field.TypeBool, Default: false},
 		{Name: "is_paid", Type: field.TypeBool, Default: false},
 		{Name: "is_public", Type: field.TypeBool, Default: false},
@@ -486,19 +488,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "events_businesses_events",
-				Columns:    []*schema.Column{EventsColumns[61]},
+				Columns:    []*schema.Column{EventsColumns[63]},
 				RefColumns: []*schema.Column{BusinessesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "events_places_events",
-				Columns:    []*schema.Column{EventsColumns[62]},
+				Columns:    []*schema.Column{EventsColumns[64]},
 				RefColumns: []*schema.Column{PlacesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "events_users_ownedEvents",
-				Columns:    []*schema.Column{EventsColumns[63]},
+				Columns:    []*schema.Column{EventsColumns[65]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -709,6 +711,7 @@ var (
 		{Name: "plan_media", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "post_medias", Type: field.TypeString, Nullable: true, Size: 36},
 		{Name: "review_medias", Type: field.TypeString, Nullable: true},
+		{Name: "ticket_option_media", Type: field.TypeString, Nullable: true},
 		{Name: "website_assets", Type: field.TypeString, Nullable: true},
 	}
 	// MediaTable holds the schema information for the "media" table.
@@ -748,8 +751,14 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "media_websites_assets",
+				Symbol:     "media_ticket_options_media",
 				Columns:    []*schema.Column{MediaColumns[12]},
+				RefColumns: []*schema.Column{TicketOptionsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "media_websites_assets",
+				Columns:    []*schema.Column{MediaColumns[13]},
 				RefColumns: []*schema.Column{WebsitesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -3040,7 +3049,8 @@ func init() {
 	MediaTable.ForeignKeys[2].RefTable = PlansTable
 	MediaTable.ForeignKeys[3].RefTable = PostsTable
 	MediaTable.ForeignKeys[4].RefTable = ReviewsTable
-	MediaTable.ForeignKeys[5].RefTable = WebsitesTable
+	MediaTable.ForeignKeys[5].RefTable = TicketOptionsTable
+	MediaTable.ForeignKeys[6].RefTable = WebsitesTable
 	OrdersTable.ForeignKeys[0].RefTable = UsersTable
 	PlacesTable.ForeignKeys[0].RefTable = BusinessesTable
 	PlacesTable.ForeignKeys[1].RefTable = EventsTable

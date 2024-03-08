@@ -27,6 +27,8 @@ func (c *EventController) RegisterRoutes(router, routerWithoutAuth *gin.RouterGr
 	eventRouterWithoutAuth := routerWithoutAuth.Group("/events")
 	eventRouter.POST("/", middleware.ErrorMiddleware(c.createEvent))
 	eventRouter.PATCH("/:eventId", middleware.ErrorMiddleware(c.updateEvent))
+	eventRouter.PATCH("/:eventId/cancel", middleware.ErrorMiddleware(c.cancelEvent))
+	eventRouter.PATCH("/:eventId/makeActive", middleware.ErrorMiddleware(c.makeEventActive))
 	eventRouter.DELETE("/:eventId", middleware.ErrorMiddleware(c.deleteEvent))
 	eventRouterWithoutAuth.GET("/:eventId", middleware.ErrorMiddleware(c.getEventByID))
 	eventRouterWithoutAuth.GET("/", middleware.ErrorMiddleware(c.getEventsByFilters))
@@ -51,7 +53,7 @@ func (c *EventController) RegisterRoutes(router, routerWithoutAuth *gin.RouterGr
 // 18. get user ticket purchase
 // 19. update user ticket purchase
 // 20. delete user ticket purchase
-// 21. add ability to cancel event
+// 21. add ability for user to cancel event purchase
 // 22. add notifications to event
 // 23. automatically send notifications to event participants
 // 24. add a button to create a post with event
@@ -119,6 +121,53 @@ func (c *EventController) updateEvent(ctx *gin.Context) error {
 		return err
 	}
 	ctx.JSON(http.StatusOK, utility.ProcessResponse(event))
+	return nil
+}
+
+// CancelEvent godoc
+// @Summary Cancel Event
+// @Description Cancel Event
+// @Tags Event
+// @Accept  json
+// @Produce  json
+// @Param eventId path string true "Event ID"
+// @Param Authorization header string true "
+// @Success 200 {string} string "Event Cancelled"
+// @Failure 400 {object} Dto.ErrorDTO
+// @Failure 500 {object} Dto.ErrorDTO
+// @Router /events/{eventId}/cancel [patch]
+func (c *EventController) cancelEvent(ctx *gin.Context) error {
+	eventId := ctx.Param("eventId")
+	err := c.service.CancelEvent(ctx, eventId)
+	if err != nil {
+		return err
+	}
+
+	ctx.JSON(http.StatusOK, utility.ProcessResponse("", "Event Cancelled"))
+	return nil
+
+}
+
+// MakeEventActive godoc
+// @Summary Make Event Active
+// @Description Make Event Active
+// @Tags Event
+// @Accept  json
+// @Produce  json
+// @Param eventId path string true "Event ID"
+// @Param Authorization header string true "
+// @Success 200 {string} string "Event Activated"
+// @Failure 400 {object} Dto.ErrorDTO
+// @Failure 500 {object} Dto.ErrorDTO
+// @Router /events/{eventId}/makeActive [patch]
+func (c *EventController) makeEventActive(ctx *gin.Context) error {
+	eventId := ctx.Param("eventId")
+	err := c.service.MakeEventActive(ctx, eventId)
+	if err != nil {
+		return err
+	}
+
+	ctx.JSON(http.StatusOK, utility.ProcessResponse("", "Event Activated"))
 	return nil
 }
 

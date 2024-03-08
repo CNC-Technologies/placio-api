@@ -37,7 +37,7 @@ import (
 	"placio-pkg/kafka"
 	"placio-pkg/middleware"
 
-	"github.com/cloudinary/cloudinary-go/v2"
+	cloudinary "github.com/cloudinary/cloudinary-go/v2"
 
 	"github.com/gin-gonic/gin"
 	swaggerfiles "github.com/swaggo/files"
@@ -226,7 +226,7 @@ func InitializeRoutes(app *gin.Engine, client *ent.Client) {
 		smartFitnessController.RegisterRoutes(routerGroupV1, routerGroupV1WithoutAuth)
 
 		// tickets
-		ticketService := tickets.NewTicketService(client)
+		ticketService := tickets.NewTicketService(client, mediaService)
 		ticketController := tickets.NewTicketController(ticketService)
 		ticketController.RegisterRoutes(routerGroupV1, routerGroupV1WithoutAuth)
 	}
